@@ -1,0 +1,14 @@
+# Ignore Python virtual environment
+.venv/
+
+# Ignore compiled files
+__pycache__/
+*.pyc
+
+# Ignore data outputs
+trades_output.csv
+crypto_trades_*.csv
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
