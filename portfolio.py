@@ -1,47 +1,53 @@
-"""Capital management, ATR‑based sizing, TP/SL, fee & slippage."""
-from datetime import datetime
 import pandas as pd
-FEE_RATE = 0.001  # 0.1 % each side
-SLIPPAGE = 0.0005
-RISK_PCT = 0.05   # risk 2 % of capital per trade
+import numpy as np
+from datetime import datetime
 
 class Portfolio:
-    def __init__(self, capital: float = 1000):
-        self.capital = capital
-        self.equity_curve = []  # list of (date, capital)
-        self.trades = []
-    def _cost(self, price):
-        return price * (1 + FEE_RATE + SLIPPAGE)
-    def _proceeds(self, price):
-        return price * (1 - FEE_RATE - SLIPPAGE)
-    def enter_trade(self, symbol: str, date, price, atr, take_profit):
-        position_value = self.capital * RISK_PCT
-        qty = position_value / self._cost(price)
-        stop_loss = price - 2 * atr
-        self.capital -= position_value
-        return {
-            "Coin": symbol,
-            "Buy Date": date,
-            "Buy Price": price,
-            "Qty": qty,
-            "Stop": stop_loss,
-            "TP": take_profit,
+    def __init__(self, initial_capital=1000.0):
+        self.cash = initial_capital
+        self.holdings = {}
+        self.history = []
+        self.current_timestamp = None
+
+    def can_buy(self, symbol):
+        return symbol not in self.holdings
+
+    def can_sell(self, symbol):
+        return symbol in self.holdings
+
+    def buy(self, symbol, price, timestamp=None):
+        if price <= 0 or self.cash <= 0:
+            return 0
+        quantity = self.cash / price
+        self.holdings[symbol] = {
+            "quantity": quantity,
+            "entry_price": price,
+            "timestamp": pd.to_datetime(timestamp) if timestamp else pd.Timestamp.now(),
         }
-    def exit_trade(self, pos, date, price):
-        proceeds = self._proceeds(price) * pos["Qty"]
-        buy_cost = pos["Qty"] * self._cost(pos["Buy Price"])
-        profit = proceeds - buy_cost
-        self.capital += proceeds
-        self.trades.append({
-            **pos,
-            "Sell Date": date,
-            "Sell Price": price,
-            "Profit": profit,
-            "Capital After Trade": self.capital,
-        })
-    def log_equity(self, date):
-        self.equity_curve.append({"Date": date, "Capital": self.capital})
-    def trades_df(self):
-        return pd.DataFrame(self.trades)
-    def equity_df(self):
-        return pd.DataFrame(self.equity_curve)
+        self.cash = 0
+        return quantity
+
+    def sell(self, symbol, price, timestamp=None):
+        if symbol not in self.holdings or price <= 0:
+            return 0, 0, 0
+        data = self.holdings.pop(symbol)
+        quantity = data["quantity"]
+        entry_price = data["entry_price"]
+        entry_time = data["timestamp"]
+
+        proceeds = quantity * price
+        pnl = proceeds - (quantity * entry_price)
+        self.cash += proceeds
+
+        # Calculate hold time in hours
+        exit_time = pd.to_datetime(timestamp) if timestamp else pd.Timestamp.now()
+        hold_time = (exit_time - entry_time).total_seconds() / 3600.0
+
+        return quantity, pnl, hold_time
+
+    def equity_curve(self):
+        equity = []
+        total = self.cash
+        for _ in range(len(self.history)):
+            equity.append(total)
+        return equity

@@ -1,0 +1,10 @@
+.env
+.env.local
+node_modules/
+.git/
+**/*.secret.json
+**/private-keys/
+.venv/
+__pycache__/
+*.csv
+models/

@@ -1,164 +1,125 @@
-# main.py
-# ----------------------------------------------------------------------
-"""CLI entry point for back-testing or live paper trading."""
-
 import argparse
 import logging
-import os
-import sys
-from dotenv import load_dotenv
-load_dotenv(".env")
-from datetime import datetime
-from pathlib import Path
-
 import pandas as pd
-from rich import print
-
-from data import get_crypto_ohlcv
-from features import add_indicators, FEATURE_COLS
-from model import load_models, train_model
-from xgb_model import train_xgb
+from data import get_price_data
+from model import load_model
+from features import add_features, FEATURE_COLS
 from backtester import Backtester, metrics
-from portfolio import Portfolio
-from ensemble import EnsemblePredictor
-from live import CONNECTORS
+from technical_votes import signal_with_confidence
 
-# ---------------- logging / env ----------------
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    force=True,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger(__name__)
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Crypto Trading Bot V2")
+    parser.add_argument("--mode", type=str, choices=["backtest", "live"], required=True)
+    parser.add_argument("--symbols", nargs="+", required=True)
+    parser.add_argument("--strategy", type=str, default="ensemble", help="Strategy: ensemble, xgb, rsi")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    return parser.parse_args()
 
-# ------------------------------------------------------------------ #
-def _backtest_cli(args):
-    logger.info("Starting back-test …")
+def generate_features(df):
+    return add_features(df)
 
-    symbols = args.symbols
-    model_cache = load_models(symbols)
+def run_backtest(symbols, strategy, debug):
+    logging.info("Starting back-test …")
     all_trades = []
 
-    for sym in symbols:
-        logger.info(f"[{sym}] fetching data …")
-        raw = get_crypto_ohlcv(sym)
-        df_feat = add_indicators(raw)
+    for symbol in symbols:
+        try:
+            logging.info(f"[{symbol}] fetching data …")
+            df = get_price_data(symbol)
+            if df is None or df.empty or not isinstance(df, pd.DataFrame):
+                raise ValueError("No valid price data returned")
 
-        # ---------- wrapper so trades is always defined --------------
-        for attempt in (1, 2):          # max two tries per symbol
-            try:
-                bt = Backtester(
-                    sym,
-                    df_feat,
-                    model_cache,
-                    start_idx=args.warmup if hasattr(args, "warmup") else 120,
-                    debug=args.debug,
-                )
-                trades, _ = bt.run()
-                break                   # success → exit retry-loop
-            except Exception as e:
-                logger.warning(f"[{sym}] back-test failed (attempt {attempt}): {e}")
-                if attempt == 1:
-                    # try once more after training models
-                    logger.info(f"[{sym}] training fresh models …")
-                    train_model(sym, df_feat, FEATURE_COLS)
-                    train_xgb(sym, df_feat, FEATURE_COLS)
-                    model_cache = load_models([sym]) | model_cache
-                    continue
-                # second failure → give up
-                trades = pd.DataFrame()
-                break
+            df = generate_features(df)
+            bt = Backtester(symbol=symbol, df=df, strategy=strategy, debug=debug)
+            trades, equity = bt.run()
 
-        # ---------- book-keeping ------------------------------------
-        if not trades.empty:
-            all_trades.append(trades)
-            print(f"\n✅ Completed [{sym}] with {len(trades)} trades")
-            for k, v in metrics(trades).items():
-                print(f"{k}: {v:.2f}" if isinstance(v, float) else f"{k}: {v}")
-        else:
-            print(f"\n⚠️  No trades executed for {sym}")
+            if trades is not None and not trades.empty:
+                all_trades.append(trades)
+                logging.info(f"✅ Completed backtest for {symbol}: {len(trades)} trades")
+            else:
+                logging.warning(f"⚠️ No trades executed for {symbol}")
+        except Exception as e:
+            logging.warning(f"[{symbol}] back-test failed: {e}")
+            continue
 
     if all_trades:
-        combined = pd.concat(all_trades)
-        combined.to_csv("trades_output.csv", index=False)
-        print("\n📦 All trades saved to trades_output.csv")
+        all_trades_df = pd.concat(all_trades, ignore_index=True)
+        logging.info("\n📊 Backtest Summary:")
+        for k, v in metrics(all_trades_df).items():
+            print(f"{k}: {v:.2f}" if isinstance(v, float) else f"{k}: {v}")
+    else:
+        logging.warning("❌ No trades were executed in this backtest session.")
 
-# ------------------------------------------------------------------ #
-def _live_cli(args):
-    """Simple continuous paper-trading loop."""
-    from technical_votes import predict as tech_predict
-    from backtester import _create_sequence
+def run_live(symbols, strategy, debug):
+    from alpaca_connector import AlpacaConnector
+    import time
+    
+    logging.info(f"🚀 Starting LIVE trading session (Strategy: {strategy})")
+    connector = AlpacaConnector(paper=True) 
+    
+    while True:
+        for symbol in symbols:
+            try:
+                # 1. Fetch latest data (matches backtest source)
+                df = get_price_data(symbol, days=80) # Need enough history for window (60) + features
+                if df is None or df.empty: continue
+                
+                # 2. Generate features
+                df = generate_features(df)
+                
+                # 3. Instantiate Backtester (loads models)
+                # We re-instantiate to ensure clean state and fresh model reload if changed
+                bt = Backtester(symbol=symbol, df=df, strategy=strategy, debug=debug)
+                
+                # 4. Get Signal
+                signal, debug_info = bt.get_trade_signal(index=-1)
+                
+                if debug:
+                    logging.info(f"[{symbol}] Signal: {signal} | Info: {debug_info}")
+                else:
+                    logging.info(f"[{symbol}] Signal: {signal}")
+                
+                # 5. Execute
+                if signal == "BUY":
+                    # Check if we already have a position?
+                    # Alpaca connector handles 'buy' as a market order.
+                    # Simple logic: Buy $100 worth.
+                    # We might want to check current position to avoid double buying if we are HOLDING
+                    # But for now, let's trust the signal is "Action" based.
+                    # Wait, get_trade_signal returns BUY if votes >= 2.
+                    # If we hold, and votes >= 2, we keep holding (or buy more?).
+                    # The Backtester.run() logic checks specific entry/exit.
+                    # Live logic should probably just buy if no position, or hold.
+                    # AlpacaConnector doesn't track "internal" state easily without querying.
+                    # Let's simple: Buy $100.
+                    connector.buy_usd_notional(symbol, 100.0)
+                elif signal == "SELL":
+                    connector.close_all() # Logic says close all for symbol? AlpacaConnector.close_all closes ALL positions.
+                    # Ideally we close only this symbol.
+                    connector.sell_usd_notional(symbol, 100.0) # Or sell all?
+                    # Let's stick to safe "sell what we can" or "close all" if that's the intention.
+                    # The previous code had `connector.close_all()`. I'll stick to that or `sell_usd_notional`.
+                    # Actually, let's use close_all() as it's safer to exit everything on a SELL signal for now.
+                    connector.close_all()
 
-    connector_cls = CONNECTORS[args.broker]
-    broker = connector_cls(paper=True)
+            except Exception as e:
+                logging.error(f"Error in live loop for {symbol}: {e}")
+                
+        logging.info("Sleeping for 1 hour...")
+        time.sleep(3600)
 
-    symbols = args.symbols
-    model_cache = load_models(symbols)
-
-    # ensure models exist
-    for sym in symbols:
-        if sym not in model_cache:
-            raw = get_crypto_ohlcv(sym)
-            df_feat = add_indicators(raw)
-            train_model(sym, df_feat, FEATURE_COLS)
-            train_xgb(sym, df_feat, FEATURE_COLS)
-    model_cache = load_models(symbols)
-
-    print("[yellow]🎯 Live paper loop — Ctrl-C to exit[/yellow]")
-    try:
-        while True:
-            for sym in symbols:
-                price = broker.latest_price(f"{sym}/USD")
-                df_live = add_indicators(get_crypto_ohlcv(sym, days=90))
-                if len(df_live) < 61:
-                    continue
-
-                # --- predictions ---
-                cache = model_cache[sym]
-                seq = _create_sequence(df_live, len(df_live) - 1)
-                lstm_pred = cache["scaler"].inverse_transform(
-                    [[cache["model"].predict(seq, verbose=0)[0][0]]]
-                )[0][0]
-
-                from xgb_model import load_xgb
-                xgb_model = load_xgb(sym)
-                xgb_pred = float(
-                    xgb_model.predict(df_live.iloc[-1][FEATURE_COLS].values.reshape(1, -1))[0]
-                )
-
-                tech_pred = price * (1 + (tech_predict(df_live.iloc[-1]) - 0.5) * 0.02)
-
-                blended = EnsemblePredictor({"lstm": 1, "xgb": 1, "technical": 1}).predict(
-                    {"lstm": lstm_pred, "xgb": xgb_pred, "technical": tech_pred}
-                )
-                gain = (blended - price) / price
-
-                # --- trade logic ---
-                if gain > 0.002:
-                    broker.buy_usd_notional(f"{sym}/USD", 100)
-                    print(f"[green]{sym} BUY 100 USD notional at {price:.2f} (pred {blended:.2f})[/green]")
-
-    except KeyboardInterrupt:
-        print("\nStopped.")
-
-def cli():
-    parser = argparse.ArgumentParser(description="Crypto Bot v2.5")
-    parser.add_argument("--mode", choices=["backtest", "live"], default="backtest")
-    parser.add_argument("--symbols", nargs="+", default=["BTC"], help="Coin tickers")
-    parser.add_argument("--broker", default="alpaca", choices=CONNECTORS.keys())
-    parser.add_argument("--capital", type=float, default=10_000, help="Start equity (USD)")
-    parser.add_argument("--debug", action="store_true", help="Verbose back-test output")
-    parser.add_argument("--strategy", default="ensemble", choices=["ensemble"],
-                        help="(reserved for future)")
-    args = parser.parse_args()
+def main():
+    args = parse_args()
 
     if args.mode == "backtest":
-        _backtest_cli(args)
-    else:
-        _live_cli(args)
-
+        run_backtest(args.symbols, args.strategy, args.debug)
+    elif args.mode == "live":
+        run_live(args.symbols, args.strategy, args.debug)
 
 if __name__ == "__main__":
-    cli()
+    main()

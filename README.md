@@ -11,37 +11,24 @@
 
 ---
 
-# 🚀 Crypto Trader Bot v2.5 (Aggressive AI Edition)
+# 🧠 crypto_trader_bot_v2
 
-_A project by **RekitRex** 🧠💰_
+An AI-powered cryptocurrency trading bot using ensemble learning, LSTM, XGBoost, and traditional technical indicators. Includes backtesting, live trading, and strategy comparison modules.
 
----
+## 🚀 Features
 
-## 📚 About This Project
+- ✅ Modular strategy engine with support for RSI, MACD, SMA, LSTM, and XGBoost
+- 📈 Ensemble model combining deep learning and boosting techniques
+- 🔁 Backtesting engine with visual PnL and trade summaries
+- 💰 Live paper trading mode using CryptoCompare data
+- 🧠 Model retraining & hybrid prediction support
+- 📊 SQLite and CSV trade logging
 
-This isn't your average crypto bot.  
-**This beast learns. Predicts. Trades aggressively.**
-
-It uses:
-- 🧠 **LSTM Neural Networks**
-- 🎯 **XGBoost Tree Boosters**
-- 📈 **Technical Indicators**
-- 🔥 **Adaptive Trading Regimes**
-
-Pre-trained models included. Ready to go.
-
----
-
-## 🛠️ Setup Instructions
+## 📦 Installation
 
 ```bash
-# Clone Repo
-git clone https://github.com/YOUR-GITHUB-USERNAME/crypto_bot_v2.git
-cd crypto_bot_v2
-
-# Create Virtual Environment
+git clone https://github.com/RekitRex21/crypto_trader_bot_v2
+cd crypto_trader_bot_v2
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Install Requirements
 pip install -r requirements.txt

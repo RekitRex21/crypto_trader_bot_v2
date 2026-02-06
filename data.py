@@ -1,46 +1,50 @@
-# data.py  —  clean OHLCV fetcher for CryptoCompare
 import os
-import logging
-from datetime import datetime
 import requests
 import pandas as pd
+import logging
+from datetime import datetime, timedelta
 
-API_KEY = os.getenv("CRYPTOCOMPARE_API_KEY", "YOUR_CRYPTOCOMPARE_API_KEY")
-BASE_URL = "https://min-api.cryptocompare.com/data/v2/histoday"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def get_crypto_ohlcv(symbol: str, days: int = 365, quote: str = "USD") -> pd.DataFrame:
-    """
-    Return a tidy OHLCV DataFrame with columns:
-    Date | Open | High | Low | Close | Volume
-    """
-    url = f"{BASE_URL}?fsym={symbol}&tsym={quote}&limit={days}&api_key={API_KEY}"
+API_URL = "https://min-api.cryptocompare.com/data/v2/histoday"
+API_KEY = os.getenv("CRYPTOCOMPARE_API_KEY")
+
+def get_price_data(symbol: str, days: int = 365) -> pd.DataFrame:
+    """Fetch historical price data for a crypto symbol from CryptoCompare."""
+    params = {
+        "fsym": symbol,
+        "tsym": "USD",
+        "limit": days,
+        "api_key": API_KEY
+    }
+
     try:
-        r = requests.get(url, timeout=10)
-        r.raise_for_status()
-        raw = r.json()["Data"]["Data"]
+        logger.info(f"[{symbol}] Fetching data from CryptoCompare…")
+        response = requests.get(API_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        if data["Response"] != "Success":
+            logger.warning(f"[{symbol}] API response error: {data.get('Message', 'No message')}")
+            return pd.DataFrame()
+
+        df = pd.DataFrame(data["Data"]["Data"])
+        df["time"] = pd.to_datetime(df["time"], unit="s")
+        df.rename(columns={
+            "time": "Date",
+            "open": "open",
+            "high": "high",
+            "low": "low",
+            "close": "close",
+            "volumefrom": "volumefrom",
+            "volumeto": "volumeto"
+        }, inplace=True)
+        df.set_index("Date", inplace=True)
+
+        logger.info(f"[{symbol}] Data shape: {df.shape}")
+        return df
+
     except Exception as e:
-        logging.error(f"📡 Fetch failed for {symbol}: {e}")
+        logger.error(f"[{symbol}] Failed to fetch data: {e}")
         return pd.DataFrame()
-
-    if not raw:
-        logging.warning(f"🛑 No data returned for {symbol}")
-        return pd.DataFrame()
-
-    df = (
-        pd.DataFrame(raw)
-        .rename(
-            columns={
-                "time": "Timestamp",
-                "open": "Open",
-                "high": "High",
-                "low": "Low",
-                "close": "Close",
-                "volumeto": "Volume",
-            }
-        )
-        .assign(Date=lambda x: pd.to_datetime(x["Timestamp"], unit="s"))
-        .loc[:, ["Date", "Open", "High", "Low", "Close", "Volume"]]
-        .sort_values("Date")
-        .reset_index(drop=True)
-    )
-    return df

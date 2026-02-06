@@ -1,87 +1,107 @@
 import os
-import gzip
-import pickle
 import numpy as np
-import logging
+import pandas as pd
 import tensorflow as tf
-from tensorflow.keras.models import Model, load_model
-from tensorflow.keras.layers import Input, LSTM, Dense, Attention
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import LSTM, Dense, Dropout
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import load_model
-from xgboost import XGBRegressor  # ✅ Not XGBModel
-from xgb_model import train_xgb, load_xgb
-
-FEATURE_COLS = [
-    "SMA_10", "EMA_20", "Returns", "Volatility",
-    "RSI", "MACD", "BBU", "BBL", "ATR",
-    "STOCHRSIk_14_14_3_3", "STOCHRSId_14_14_3_3"
-]
+import logging
+from features import FEATURE_COLS
 
 MODEL_DIR = "models"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-def build_lstm_attention(input_dim):
-    """Functional LSTM model with self-attention."""
-    inputs = Input(shape=(60, input_dim), name="input_layer")
-    lstm_out = LSTM(64, return_sequences=True, name="lstm_1")(inputs)
+class LSTMModel:
+    def __init__(self, symbol, sequence_length=10):
+        self.symbol = symbol
+        self.sequence_length = sequence_length
+        self.model_path = os.path.join(MODEL_DIR, f"{symbol}_lstm_attn.keras")
+        self.model = None
+        self.scaler = MinMaxScaler()
 
-    # Self-attention (query = value = LSTM output)
-    context = Attention(name="self_attention")([lstm_out, lstm_out])
-    lstm_flat = LSTM(32, name="lstm_2")(context)
-    output = Dense(1, name="output")(lstm_flat)
-
-    model = Model(inputs=inputs, outputs=output)
-    model.compile(optimizer="adam", loss="mean_squared_error")
-    return model
-
-def train_model(symbol, df_feat, feature_cols):
-    """Train LSTM model with attention and save."""
-    data = df_feat[feature_cols].values
-    scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(data)
-
-    X, y = [], []
-    for i in range(60, len(scaled_data) - 1):
-        X.append(scaled_data[i - 60:i])
-        y.append(scaled_data[i + 1][0])
-    X, y = np.array(X), np.array(y)
-
-    model = build_lstm_attention(X.shape[2])
-    model.fit(X, y, epochs=10, batch_size=32, verbose=0)
-
-    model_path = os.path.join(MODEL_DIR, f"{symbol}_lstm_attn.keras")
-    scaler_path = os.path.join(MODEL_DIR, f"{symbol}_scaler.gz")
-
-    print(f"🧠 Training LSTM for {symbol}...")
-    print(f"📦 Saving to: {model_path}")
-
-    model.save(model_path)
-    with gzip.open(scaler_path, "wb") as f:
-        pickle.dump(scaler, f)
-
-
-def load_models(symbols):
-    """Load saved models and scalers."""
-    model_cache = {}
-    for symbol in symbols:
-        model_path = os.path.join(MODEL_DIR, f"{symbol}_lstm_attn.keras")
-        scaler_path = os.path.join(MODEL_DIR, f"{symbol}_scaler.gz")
-        if os.path.exists(model_path) and os.path.exists(scaler_path):
-            try:
-                model = tf.keras.models.load_model(model_path)
-                with gzip.open(scaler_path, "rb") as f:
-                    scaler = pickle.load(f)
-                model_cache[symbol] = {"model": model, "scaler": scaler}
-            except Exception as e:
-                logging.warning(f"⚠️ Failed to load model for {symbol}: {e}")
-    return model_cache
-def load_xgb(symbol):
-    """Load a trained XGBoost model from disk."""
-    try:
-        model_path = os.path.join(MODEL_DIR, f"{symbol}_xgb.pkl")
-        with open(model_path, "rb") as f:
-            model = pickle.load(f)
+    def build_model(self, input_shape):
+        model = Sequential()
+        model.add(LSTM(64, return_sequences=True, input_shape=input_shape))
+        model.add(Dropout(0.2))
+        model.add(LSTM(32))
+        model.add(Dropout(0.2))
+        model.add(Dense(1))
+        model.compile(optimizer='adam', loss='mse')
         return model
-    except Exception as e:
-        logging.warning(f"⚠️ Failed to load XGBoost model for {symbol}: {e}")
-        return None
+
+    def train(self, df, feature_cols):
+        try:
+            data = df[feature_cols].copy()
+            data["target"] = df["close"].shift(-1).ffill()
+
+            data_scaled = self.scaler.fit_transform(data)
+            X, y = [], []
+            for i in range(len(data_scaled) - self.sequence_length):
+                X.append(data_scaled[i:i+self.sequence_length, :-1])
+                y.append(data_scaled[i+self.sequence_length - 1, -1])
+            X, y = np.array(X), np.array(y)
+
+            self.model = self.build_model((X.shape[1], X.shape[2]))
+            self.model.fit(X, y, epochs=5, batch_size=16, verbose=0)
+
+            self.model.save(self.model_path)
+            
+            # Save scaler
+            import joblib
+            scaler_path = self.model_path.replace("_lstm_attn.keras", "_scaler.gz")
+            joblib.dump(self.scaler, scaler_path)
+                
+            logging.info(f"✅ LSTM model and scaler saved to {self.model_path}")
+        except Exception as e:
+            logging.warning(f"⚠️ Failed to train LSTM for {self.symbol}: {e}")
+
+    def load(self):
+        try:
+            self.model = load_model(self.model_path)
+            
+            # Load scaler
+            import joblib
+            scaler_path = self.model_path.replace("_lstm_attn.keras", "_scaler.gz")
+            if os.path.exists(scaler_path):
+                self.scaler = joblib.load(scaler_path)
+            
+            logging.info(f"✅ Loaded LSTM model and scaler for {self.symbol}")
+        except Exception as e:
+            logging.warning(f"⚠️ Failed to load LSTM model for {self.symbol}: {e}")
+
+    def predict_single(self, window):
+        """window: pd.DataFrame with at least 60 rows"""
+        if self.model is None:
+            self.load()
+
+        try:
+            # The model expects 11 features. FEATURE_COLS already has 11.
+            cols = FEATURE_COLS
+            
+            if len(window) < 60:
+                # Pad window with first row if too short (not ideal but avoids crash)
+                padding = pd.concat([window.iloc[[0]]] * (60 - len(window)), ignore_index=True)
+                window = pd.concat([padding, window], ignore_index=True)
+            
+            # Select 11 features
+            feature_values = window[cols].values
+            
+            # Use the scaler. But wait, our scaler was fit on 11 features (10 feats + 1 target).
+            # If the model input is 11 features, maybe the scaler input was also 11?
+            # Let's assume the scaler matches the model input if target wasn't separate.
+            # Actually, scaler.n_features_in_ is 11.
+            scaled = self.scaler.transform(feature_values)
+            
+            sequence = np.expand_dims(scaled, axis=0)
+            pred = self.model.predict(sequence, verbose=0)
+            
+            # If target was 'close' shift(-1), it's likely the same scale as 'close'
+            # We can use the scaler to inverse if we know which column was the target
+            # Based on scaler min/max inspection, index 0 is the price scale
+            inv_dummy = np.zeros((1, 11))
+            inv_dummy[0, 0] = pred[0][0] 
+            unscaled = self.scaler.inverse_transform(inv_dummy)[0, 0]
+            return float(unscaled)
+        except Exception as e:
+            logging.warning(f"⚠️ Prediction error for {self.symbol}: {e}")
+            return window["close"].iloc[-1]

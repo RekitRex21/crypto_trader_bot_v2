@@ -12,3 +12,4 @@ crypto_trades_*.csv
 # Ignore OS files
 .DS_Store
 Thumbs.db
+.env

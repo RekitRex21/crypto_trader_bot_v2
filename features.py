@@ -1,29 +1,40 @@
-"""Feature engineering – TA indicators."""
 import pandas as pd
-import pandas_ta as ta
+import ta
 
+def add_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Add full technical indicator feature set to DataFrame."""
+    df = df.copy()
+
+    # Returns and Volatility
+    df["Returns"] = df["close"].pct_change()
+    df["Volatility"] = df["Returns"].rolling(window=10).std()
+
+    # SMA and EMA
+    df["SMA_10"] = ta.trend.sma_indicator(df["close"], window=10)
+    df["EMA_20"] = ta.trend.ema_indicator(df["close"], window=20)
+
+    # RSI
+    df["RSI"] = ta.momentum.rsi(df["close"], window=14)
+
+    # MACD
+    df["MACD"] = ta.trend.macd_diff(df["close"])
+
+    # Bollinger Bands
+    df["BBU"] = ta.volatility.bollinger_hband(df["close"])
+    df["BBL"] = ta.volatility.bollinger_lband(df["close"])
+
+    # ATR
+    df["ATR"] = ta.volatility.average_true_range(df["high"], df["low"], df["close"])
+
+    # Stochastic RSI
+    stoch_rsi = ta.momentum.StochRSIIndicator(df["close"], window=14, smooth1=3, smooth2=3)
+    df["STOCHRSIk_14_14_3_3"] = stoch_rsi.stochrsi_k()
+    df["STOCHRSId_14_14_3_3"] = stoch_rsi.stochrsi_d()
+
+    return df.dropna()
+
+# List of feature columns used in modeling
 FEATURE_COLS = [
-    "SMA_10", "EMA_20", "Returns", "Volatility",
-    "RSI", "MACD", "BBU", "BBL", "ATR", "STOCHRSIk_14_14_3_3",
-"STOCHRSId_14_14_3_3",
+    "SMA_10", "EMA_20", "Returns", "Volatility", "RSI", "MACD", 
+    "BBU", "BBL", "ATR", "STOCHRSIk_14_14_3_3", "STOCHRSId_14_14_3_3"
 ]
-
-def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    out = df.copy()
-    out["SMA_10"] = ta.sma(out["Close"], length=10)
-    out["EMA_20"] = ta.ema(out["Close"], length=20)
-    out["Returns"] = out["Close"].pct_change()
-    out["Volatility"] = out["Returns"].rolling(24).std()
-    out["RSI"] = ta.rsi(out["Close"], length=14)
-    macd = ta.macd(out["Close"])
-    out["MACD"] = macd["MACD_12_26_9"]
-    bb = ta.bbands(out["Close"], length=20, std=2)
-    out["BBU"] = bb["BBU_20_2.0"]
-    out["BBL"] = bb["BBL_20_2.0"]
-    out["ATR"] = ta.atr(out["High"], out["Low"], out["Close"], length=14)
-    stochrsi = ta.stochrsi(out["Close"])
-    if stochrsi is not None:
-        out = pd.concat([out, stochrsi], axis=1)
-    else:
-        print("⚠️ Warning: StochRSI returned None — not enough data?")
-    return out.dropna()
