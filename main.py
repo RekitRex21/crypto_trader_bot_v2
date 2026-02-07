@@ -98,10 +98,6 @@ def run_live(symbols, strategy, debug):
                 
             except Exception as e:
                 logging.error(f"Error in live loop for {symbol}: {e}")
-                
-        if debug:
-            logging.info("Deep dive complete. Exiting search for one-shot verification.")
-            break
         
         logging.info("Sleeping for 1 hour...")
         time.sleep(3600)
