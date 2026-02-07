@@ -85,19 +85,21 @@ class ChartImageGenerator:
                 logger.debug(f"Could not add indicators: {e}")
         
         try:
-            # Generate chart
-            fig, axes = mpf.plot(
-                chart_data,
-                type='candle',
-                style=self.style,
-                volume=include_volume,
-                addplot=addplot if addplot else None,
-                returnfig=True,
-                figsize=(8, 6),
-                tight_layout=True,
-                datetime_format='%m-%d',
-                xrotation=0,
-            )
+            # Prepare plot kwargs
+            plot_params = {
+                'type': 'candle',
+                'style': self.style,
+                'volume': include_volume,
+                'returnfig': True,
+                'figsize': (8, 6),
+                'tight_layout': True,
+                'datetime_format': '%m-%d',
+                'xrotation': 0,
+            }
+            if addplot:
+                plot_params['addplot'] = addplot
+
+            fig, axes = mpf.plot(chart_data, **plot_params)
             
             # Convert figure to numpy array
             buf = io.BytesIO()
@@ -153,16 +155,19 @@ class ChartImageGenerator:
                 pass
         
         try:
-            fig, axes = mpf.plot(
-                chart_data,
-                type='candle',
-                style=self.style,
-                volume=True,
-                addplot=addplot if addplot else None,
-                returnfig=True,
-                figsize=(12, 8),
-                tight_layout=True,
-            )
+            # Prepare plot kwargs
+            plot_params = {
+                'type': 'candle',
+                'style': self.style,
+                'volume': True,
+                'returnfig': True,
+                'figsize': (12, 8),
+                'tight_layout': True,
+            }
+            if addplot:
+                plot_params['addplot'] = addplot
+
+            fig, axes = mpf.plot(chart_data, **plot_params)
             
             buf = io.BytesIO()
             fig.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='white')

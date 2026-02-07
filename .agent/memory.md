@@ -26,11 +26,10 @@ Establish a production-ready, multi-exchange crypto trading system with vision-e
 
 ## ⚠️ Known Issues
 - Docker Engine must be manually started on Windows host.
-- Training pipeline requires manual upload/run on Google Colab GPU.
+- **BROWSER TOOL FAILURE**: Automated Colab execution is blocked due to a system-level Playwright installation error ($HOME environment variable not set). Manual execution required.
 
 ## 🚀 Next Steps
-- [ ] Run `colab_notebooks/01_data_preparation_top10.ipynb` on Colab to build the dataset.
-- [ ] Execute training notebooks (LSTM, XGB, CNN) on Colab.
+- [ ] Manual Colab Run: Open notebooks from GitHub in Colab manually.
 - [ ] Deploy trained models to local `models/` directory.
 - [ ] Deploy PostgreSQL container: `docker compose up -d`.
 - [ ] Configure production API keys in `.env`.

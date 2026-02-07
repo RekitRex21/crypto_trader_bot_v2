@@ -57,7 +57,7 @@ class CoinbaseConfig(BaseModel):
 class TelegramConfig(BaseModel):
     """Telegram bot configuration."""
     bot_token: str = Field(default="")
-    allowed_user_ids: List[int] = Field(default_factory=list)
+    allowed_user_ids: List[str] = Field(default_factory=list)
     
     @property
     def is_configured(self) -> bool:
@@ -120,7 +120,7 @@ class Config(BaseModel):
             ),
             telegram=TelegramConfig(
                 bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
-                allowed_user_ids=[int(x) for x in os.getenv("TELEGRAM_USER_IDS", "").split(",") if x],
+                allowed_user_ids=[x.strip() for x in os.getenv("TELEGRAM_USER_IDS", "").split(",") if x],
             ),
             risk=RiskConfig(
                 max_position_size=float(os.getenv("RISK_MAX_POSITION_SIZE", "0.02")),
