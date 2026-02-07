@@ -13,9 +13,10 @@ Audit the existing codebase to ensure it is in "working order" and compliant wit
 - **Logic**: Orchestrated via `main.py` and `live.py`.
 
 ## 📈 Recent Progress
-- [x] Codebase structure analyzed.
-- [x] Mission Control (`specs.md`) initialized.
-- [x] Task tracking (`task.md`) initialized.
+- [x] Analyze codebase structure.
+- [x] Initialize `specs.md` and `.agent/memory.md`.
+- [x] Audit `.aiexclude` compliance.
+- [/] Setup Environment (.env keys).
 
 ## ⚠️ Known Issues
 - Pending audit of `.env` interactions (privacy compliance).
@@ -23,6 +24,7 @@ Audit the existing codebase to ensure it is in "working order" and compliant wit
 - No unit tests visible in root (need to scan for testable logic).
 
 ## 🚀 Next Steps
-- [ ] Audit `.env` and create `.aiexclude`.
-- [ ] Verify execution environment.
-- [ ] Deep dive into model and orchestration logic.
+- [x] Audit `.env` and create `.aiexclude`.
+- [x] Verify execution environment (Python 3.12 venv).
+- [x] Configure `.env` with API keys.
+- [/] Deep dive into model and orchestration logic.

@@ -8,8 +8,17 @@ __pycache__/
 # Ignore data outputs
 trades_output.csv
 crypto_trades_*.csv
+trades_log.txt
+bot_output.log
+equity_curve.csv
 
 # Ignore OS files
 .DS_Store
 Thumbs.db
 .env
+.venv312/
+.env.template
+env_setup.txt
+
+# Added by ggshield
+.cache_ggshield

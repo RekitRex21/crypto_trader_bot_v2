@@ -60,12 +60,17 @@ class Backtester:
         if tech_score > 0: votes += 1
         if lstm_pred > row["close"]: votes += 1
 
-        if self.debug:
-            logger.info(f"DEBUG [{self.symbol}]: Price: {row['close']:.2f}, XGB: {xgb_score:.2f}, Tech: {tech_score}, LSTM: {lstm_pred:.2f}, Votes: {votes}")
+        debug_info = {
+            "price": row["close"],
+            "xgb": xgb_score,
+            "tech": tech_score,
+            "lstm": lstm_pred,
+            "votes": votes
+        }
 
-        if votes >= 2: return "BUY"
-        elif votes <= 1: return "SELL"
-        return "HOLD"
+        if votes >= 2: return "BUY", debug_info
+        elif votes <= 1: return "SELL", debug_info
+        return "HOLD", debug_info
 
     def run(self):
         self.df = add_features(self.df)
@@ -76,7 +81,7 @@ class Backtester:
 
         for idx, row in self.df.iterrows():
             # Get the signal using the new method
-            signal = self.get_trade_signal(index=self.df.index.get_loc(idx))
+            signal, _ = self.get_trade_signal(index=self.df.index.get_loc(idx))
             
             # The 'decide' method's logic for position management is still needed here
             decision = "HOLD"

@@ -40,7 +40,7 @@ class AlpacaConnector:
                 symbol=symbol,
                 notional=amount_usd,
                 side=OrderSide.BUY,
-                time_in_force=TimeInForce.GTC,
+                time_in_force=TimeInForce.DAY,
             )
             self.client.submit_order(order)
             logger.info(f"✅ Bought ${amount_usd:.2f} of {symbol}")
@@ -55,7 +55,7 @@ class AlpacaConnector:
                 symbol=symbol,
                 notional=amount_usd,
                 side=OrderSide.SELL,
-                time_in_force=TimeInForce.GTC,
+                time_in_force=TimeInForce.DAY,
             )
             self.client.submit_order(order)
             logger.info(f"✅ Sold ${amount_usd:.2f} of {symbol}")

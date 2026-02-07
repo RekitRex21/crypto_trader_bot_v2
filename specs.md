@@ -4,10 +4,12 @@
 Evaluate, audit, and stabilize a production-ready cryptocurrency trading bot with ensemble ML models and Alpaca integration.
 
 ## 📋 Master Task List
-- [ ] **Phase 1: Core Setup & Audit**
+- [x] Phase 1: Core Setup & Audit
   - [x] Analyze codebase structure.
-  - [ ] Initialize `specs.md` and `.agent/memory.md`.
-  - [ ] Audit `.aiexclude` compliance.
+  - [x] Initialize `specs.md` and `.agent/memory.md`.
+  - [x] Audit `.aiexclude` compliance.
+  - [x] Stabilize Python 3.12 environment.
+  - [/] Setup Environment (.env keys).
 
 - [ ] **Phase 2: Technical Deep Dive**
   - [ ] Audit orchestration logic (`main.py`, `live.py`).

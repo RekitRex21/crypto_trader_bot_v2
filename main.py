@@ -66,50 +66,43 @@ def run_live(symbols, strategy, debug):
         for symbol in symbols:
             try:
                 # 1. Fetch latest data (matches backtest source)
-                df = get_price_data(symbol, days=80) # Need enough history for window (60) + features
-                if df is None or df.empty: continue
+                df = get_price_data(symbol, days=81) # Need enough history for window (60) + features
+                if df is None or df.empty:
+                    logging.warning(f"[{symbol}] No data fetched")
+                    continue
                 
                 # 2. Generate features
                 df = generate_features(df)
                 
                 # 3. Instantiate Backtester (loads models)
-                # We re-instantiate to ensure clean state and fresh model reload if changed
                 bt = Backtester(symbol=symbol, df=df, strategy=strategy, debug=debug)
                 
                 # 4. Get Signal
                 signal, debug_info = bt.get_trade_signal(index=-1)
                 
-                if debug:
-                    logging.info(f"[{symbol}] Signal: {signal} | Info: {debug_info}")
-                else:
-                    logging.info(f"[{symbol}] Signal: {signal}")
+                msg = f"[{symbol}] Price: {debug_info['price']:.2f} | Votes: {debug_info['votes']} | Signal: {signal}"
+                logging.info(msg)
                 
                 # 5. Execute
                 if signal == "BUY":
-                    # Check if we already have a position?
-                    # Alpaca connector handles 'buy' as a market order.
-                    # Simple logic: Buy $100 worth.
-                    # We might want to check current position to avoid double buying if we are HOLDING
-                    # But for now, let's trust the signal is "Action" based.
-                    # Wait, get_trade_signal returns BUY if votes >= 2.
-                    # If we hold, and votes >= 2, we keep holding (or buy more?).
-                    # The Backtester.run() logic checks specific entry/exit.
-                    # Live logic should probably just buy if no position, or hold.
-                    # AlpacaConnector doesn't track "internal" state easily without querying.
-                    # Let's simple: Buy $100.
+                    logging.info(f"🚀 Executing BUY for {symbol}")
                     connector.buy_usd_notional(symbol, 100.0)
                 elif signal == "SELL":
-                    connector.close_all() # Logic says close all for symbol? AlpacaConnector.close_all closes ALL positions.
-                    # Ideally we close only this symbol.
-                    connector.sell_usd_notional(symbol, 100.0) # Or sell all?
-                    # Let's stick to safe "sell what we can" or "close all" if that's the intention.
-                    # The previous code had `connector.close_all()`. I'll stick to that or `sell_usd_notional`.
-                    # Actually, let's use close_all() as it's safer to exit everything on a SELL signal for now.
-                    connector.close_all()
-
+                    # Check if we have a position before closing
+                    try:
+                        pos = connector.client.get_open_position(symbol)
+                        logging.info(f"🔴 Signal SELL for {symbol}. Closing position of {pos.qty} units.")
+                        connector.close_all() # Or specifically close this one
+                    except Exception:
+                        logging.info(f"⚪ Signal SELL for {symbol} but no open position found. Skipping.")
+                
             except Exception as e:
                 logging.error(f"Error in live loop for {symbol}: {e}")
                 
+        if debug:
+            logging.info("Deep dive complete. Exiting search for one-shot verification.")
+            break
+        
         logging.info("Sleeping for 1 hour...")
         time.sleep(3600)
 
