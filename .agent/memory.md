@@ -1,30 +1,37 @@
-# Persistent Memory: Crypto Bot V2
+# Persistent Memory: Crypto Bot V2 ➡ V3 Transformation
 
 ## 🎯 Current Objective
-Audit the existing codebase to ensure it is in "working order" and compliant with the Antigravity Master System Prompt.
+Establish a production-ready, multi-exchange crypto trading system with vision-enhanced AI strategy and Telegram control.
 
 ## 🏗️ Technical Architecture
-- **Language**: Python
-- **Exchange Integration**: Alpaca (via `alpaca_connector.py`)
-- **ML Models**: 
-  - LSTM (`lstm_model.py`)
-  - XGBoost (`xgb_model.py`)
-  - Ensemble (`ensemble.py`)
-- **Logic**: Orchestrated via `main.py` and `live.py`.
+- **Language**: Python 3.12
+- **Infrastructure**: PostgreSQL via Docker, Pydantic Config, Structured JSON Logging
+- **Exchanges**: Alpaca, Binance US, Coinbase (Unified via Base Connector)
+- **Vision Engine**: OHLCV Chart Generation + CNN Pattern Recognition
+- **Strategy**: Multi-Model Ensemble (LSTM 30%, XGB 30%, CNN 40%)
+- **Interface**: Async Telegram Bot for monitoring, alerts, and commands
+- **Database**: Trade logging, position tracking, and performance metrics
+- **Training**: Expanded multi-asset pipeline (10 symbols) on Google Colab
 
 ## 📈 Recent Progress
-- [x] Analyze codebase structure.
-- [x] Initialize `specs.md` and `.agent/memory.md`.
-- [x] Audit `.aiexclude` compliance.
-- [/] Setup Environment (.env keys).
+- [x] Stabilized Python 3.12 environment and dependencies.
+- [x] Configured PostgreSQL Docker container with persistent volumes.
+- [x] Implemented unified exchange connector layer for major US exchanges.
+- [x] Built Vision Engine for visual chart analysis.
+- [x] Developed ensemble strategy logic integrating temporal, nonlinear, and visual models.
+- [x] Created comprehensive Telegram bot for remote management.
+- [x] Integrated all systems into `main_production.py`.
+- [x] Created **Enhanced Colab Training Pipeline** (`colab_notebooks/`) for Top 10 Cryptos.
+- [x] Successfully pushed the complete V3 system and notebooks to GitHub.
 
 ## ⚠️ Known Issues
-- Pending audit of `.env` interactions (privacy compliance).
-- Uncertain status of dependencies (need to verify `requirements.txt`).
-- No unit tests visible in root (need to scan for testable logic).
+- Docker Engine must be manually started on Windows host.
+- Training pipeline requires manual upload/run on Google Colab GPU.
 
 ## 🚀 Next Steps
-- [x] Audit `.env` and create `.aiexclude`.
-- [x] Verify execution environment (Python 3.12 venv).
-- [x] Configure `.env` with API keys.
-- [/] Deep dive into model and orchestration logic.
+- [ ] Run `colab_notebooks/01_data_preparation_top10.ipynb` on Colab to build the dataset.
+- [ ] Execute training notebooks (LSTM, XGB, CNN) on Colab.
+- [ ] Deploy trained models to local `models/` directory.
+- [ ] Deploy PostgreSQL container: `docker compose up -d`.
+- [ ] Configure production API keys in `.env`.
+- [ ] Execute paper trading test run for 24 hours.
