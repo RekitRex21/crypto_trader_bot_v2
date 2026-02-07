@@ -17,7 +17,6 @@ equity_curve.csv
 Thumbs.db
 .env
 .venv312/
-.env.template
 env_setup.txt
 
 # Added by ggshield
